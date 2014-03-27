@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function multisite_statistics_install() {
+  // Enable ajax statistics
+  variable_set('statistics_count_content_views_ajax', 1);
+  // Set module weight to run after core
+  db_query("UPDATE {system} SET weight = 5 WHERE name = 'multisite_statistics' AND type = 'module'");
+
+  $table = 'multisite_aggregate';
+  $schema = drupal_get_schema($table, TRUE);
+  foreach (array('daycount', 'totalcount', 'timestamp') as $field) {
+    if (!empty($schema['fields'][$field])) {
+      if (!db_field_exists($table, $field)) {
+        db_add_field($table, $field, $schema['fields'][$field]);
+      }
+      else {
+        db_change_field($table, $field, $field, $schema['fields'][$field]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_schema_alter().
+ */
+function multisite_statistics_schema_alter(&$schema) {
+  $schema['multisite_aggregate']['fields']['daycount'] = array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0);
+  $schema['multisite_aggregate']['fields']['totalcount'] = array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0);
+  $schema['multisite_aggregate']['fields']['timestamp'] = array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function multisite_statistics_uninstall() {
+  db_drop_field('multisite_aggregate', 'daycount');
+  db_drop_field('multisite_aggregate', 'totalcount');
+  db_drop_field('multisite_aggregate', 'timestamp');
+  variable_del('multisite_statistics_day_timestamp');
+}

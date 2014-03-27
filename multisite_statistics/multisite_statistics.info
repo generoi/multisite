@@ -1,0 +1,7 @@
+name = Multisite Statistics
+description = TODO: Description of module
+dependencies[] = multisite
+dependencies[] = statistics
+dependencies[] = multisite_aggregate
+package = custom
+core = 7.x

@@ -20,8 +20,14 @@ function multisite_views_api() {
  * @param $host (optional) the hostname of the multisite.
  */
 function multisite_get_site_id($host = NULL) {
-  $site = isset($host) ? multisite_load(array('host' => $host)) : multisite_load();
-  return isset($site->sid) ? $site->sid : NULL;
+  if (!isset($host)) {
+    $host = multisite_host();
+  }
+  $sites = &drupal_static(__FUNCTION__);
+  if (!isset($sites[$host])) {
+    $sites[$host] = multisite_load(array('host' => $host));
+  }
+  return isset($sites[$host]->sid) ? $sites[$host]->sid : NULL;
 }
 
 /**

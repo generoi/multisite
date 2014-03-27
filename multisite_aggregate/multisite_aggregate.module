@@ -183,6 +183,21 @@ function _multisite_aggregate_entity_delete($entity, $type) {
 }
 
 /**
+ * Get aggregate id from entity
+ */
+function multisite_aggregate_entity_aid($type, $entity) {
+  list($id, , $bundle) = entity_extract_ids($type, $entity);
+  $sid = multisite_get_site_id();
+  $aggregate = multisite_aggregate_load(array(
+    'type' => $type,
+    'bundle' => $bundle,
+    'entity_id' => $id,
+    'sid' => $sid,
+  ));
+  return isset($aggregate->aid) ? $aggregate->aid : FALSE;
+}
+
+/**
  * Implements hook_entity_insert().
  */
 function multisite_aggregate_entity_insert($entity, $type) {
