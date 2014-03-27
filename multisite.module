@@ -1,0 +1,99 @@
+<?php
+
+/**
+ * @file multisite.module
+ * TODO: Enter file description here.
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function multisite_views_api() {
+  return array(
+    'api' => 3,
+  );
+}
+
+/**
+ * Get a multisite id (sid).
+ *
+ * @param $host (optional) the hostname of the multisite.
+ */
+function multisite_get_site_id($host = NULL) {
+  $site = isset($host) ? multisite_load(array('host' => $host)) : multisite_load();
+  return isset($site->sid) ? $site->sid : NULL;
+}
+
+/**
+ * Get a multisite object.
+ *
+ * @param $conditions An associative array of conditions on the {multisite} table.
+ */
+function multisite_load($conditions = NULL) {
+  if (is_null($conditions)) {
+    $conditions = array('host' => multisite_host());
+  }
+  $query = db_select('multisite', 'm')
+    ->fields('m');
+
+  foreach ($conditions as $column => $value) {
+    $query->condition($column, $value);
+  }
+  $result = (object) $query->execute()->fetchAssoc();
+  return $result;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function multisite_form_system_site_information_settings_alter(&$form, $form_state) {
+  $form['#submit'][] = 'multisite_form_system_site_information_settings_submit';
+}
+
+/**
+ * Submit handler to update multisite name.
+ */
+function multisite_form_system_site_information_settings_submit($form, &$form_state) {
+  $multisite = multisite_load();
+  $multisite->name = $form_state['values']['site_name'];
+  multisite_save($multisite);
+}
+
+/**
+ * Save or update a multisite instance.
+ */
+function multisite_save($multisite) {
+  if (isset($multisite->sid)) {
+    drupal_write_record('multisite', $multisite, 'sid');
+  }
+  else {
+    drupal_write_record('multisite', $multisite);
+  }
+}
+
+/**
+ * Delete a multisite instance.
+ */
+function multisite_delete($sid) {
+  db_delete('multisite')->condition('sid', $sid)->execute();
+}
+
+/**
+ * Implements hook_multisitecreate_profile_finalize().
+ */
+function multisite_multisitecreate_profile_finalize($form_state, $user) {
+  global $databases;
+
+  $multisite = array(
+    'name' => $form_state['values']['site_name'],
+    'host' => multisite_host(),
+    'db' => $databases['default']['default']['database'],
+    'uid' => $user->uid,
+  );
+  multisite_save($multisite);
+}
+
+function multisite_host() {
+  global $base_url;
+  return parse_url($base_url, PHP_URL_HOST);
+}

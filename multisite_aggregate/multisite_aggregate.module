@@ -1,0 +1,204 @@
+<?php
+
+/**
+ * @file multisite_aggregate.module
+ * TODO: Enter file description here.
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function multisite_aggregate_views_api() {
+  return array(
+    'api' => 3,
+  );
+}
+
+/**
+ * Check whether an entity can be aggregated.
+ */
+function multisite_aggregate_validate($type, $entity) {
+  foreach (module_implements('multisite_aggregate_validate') as $module) {
+    $function = $module . '_multisite_aggregate_validate';
+    if (!$function($type, $entity)) {
+      return FALSE;
+    }
+  }
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_multisite_aggregate_validate().
+ */
+function multisite_aggregate_multisite_aggregate_validate($type, $entity) {
+  list(,, $bundle) = entity_extract_ids($type, $entity);
+  $valid_types = variable_get('multisite_aggregate_types', array());
+
+  if (!in_array($type, array_keys($valid_types))) {
+    return FALSE;
+  }
+  if (!in_array($bundle, $valid_types[$type])) {
+    return FALSE;
+  }
+  switch ($type) {
+    case 'node':
+      if ($entity->status == NODE_NOT_PUBLISHED) {
+        return FALSE;
+      }
+      break;
+  }
+  return TRUE;
+}
+
+function multisite_aggregate_get_content($entity_type, $entity, $field, $display = NULL) {
+  $value = '';
+  $context = array(
+    'entity_type' => $entity_type,
+    'entity' => $entity,
+    'field_name' => $field,
+    'display' => $display,
+  );
+  drupal_alter('multisite_aggregate_content', $value, $context);
+  return $value;
+}
+
+/**
+ * Implements hook_multisite_aggregate_content_alter().
+ */
+function multisite_aggregate_multisite_aggregate_content_alter(&$value, $context) {
+  $entity_type = $context['entity_type'];
+  $entity = $context['entity'];
+  $field_name = $context['field_name'];
+  $display = $context['display'];
+
+  $field_info = field_info_field($field_name);
+  // Render the `field_image` using teaser display mode on nodes.
+  if ($field = field_get_items($entity_type, $entity, $field_name)) {
+    switch ($field_info['type']) {
+      case 'image':
+        $fid = $field[0]['fid'];
+        $file = file_load($fid);
+        // @TODO image style?
+        $value = file_create_url($file->uri);
+        break;
+      default:
+        $build = field_view_value($entity_type, $entity, $field_name, $field[0], $display);
+        $value = render($build);
+        break;
+    }
+  }
+}
+
+/**
+ * Get a signle aggregate
+ */
+function multisite_aggregate_load($conditions) {
+  $aggregates = multisite_aggregate_load_multiple($conditions);
+  return $aggregates ? reset($aggregates) : FALSE;
+}
+
+/**
+ * Load multiple aggregates.
+ */
+function multisite_aggregate_load_multiple($conditions = array()) {
+  $query = db_select('multisite_aggregate', 'ma')
+    ->fields('ma');
+  foreach ($conditions as $column => $value) {
+    $query->condition($column, $value);
+  }
+  $result = $query->execute()->fetchAllAssoc('aid');
+  foreach ($result as $key => $aggregate) {
+    $result[$key] = (object) $aggregate;
+  }
+  return $result;
+}
+
+/**
+ * Save an entity as an aggregate.
+ */
+function _multisite_aggregate_entity_save($entity, $type) {
+  if (!multisite_aggregate_validate($type, $entity)) {
+    return;
+  }
+  list($id, , $bundle) = entity_extract_ids($type, $entity);
+
+  $sid = multisite_get_site_id();
+  $aggregate = multisite_aggregate_load(array(
+    'type' => $type,
+    'bundle' => $bundle,
+    'entity_id' => $id,
+    'sid' => $sid,
+  ));
+  $is_update = isset($aggregate->aid);
+
+  $uri = entity_uri($type, $entity);
+  $new_aggregate = array(
+    'type' => $type,
+    'bundle' => $bundle,
+    'entity_id' => $id,
+    'uid' => isset($entity->uid) ? $entity->uid : 0,
+    'label' => entity_label($type, $entity),
+    'language' => entity_language($type, $entity),
+    'uri' => $uri['path'],
+    'summary' => multisite_aggregate_get_content($type, $entity, 'body', 'teaser'),
+    'image' => multisite_aggregate_get_content($type, $entity, 'field_image', 'teaser'),
+    'created' => isset($aggregate->created) ? $aggregate->created : REQUEST_TIME,
+    'changed' => REQUEST_TIME,
+    'uuid' => isset($entity->uuid) ? $entity->uuid : '',
+    'sid' => $sid,
+  );
+  if ($is_update) {
+    $new_aggregate['aid'] = $aggregate->aid;
+  }
+  $new_aggregate['summary'] = drupal_substr($new_aggregate['summary'], 0, 255);
+  // If the image path is longer than 255, we cant store it in varchar
+  if (drupal_strlen($new_aggregate['image']) > 255) {
+    $new_aggregate['image'] = NULL;
+  }
+
+  module_invoke_all('multisite_aggregate_save_entity', $new_aggregate);
+  if ($is_update) {
+    drupal_write_record('multisite_aggregate', $new_aggregate, 'aid');
+  }
+  else {
+    drupal_write_record('multisite_aggregate', $new_aggregate);
+  }
+}
+/**
+ * Remove an aggregated item.
+ */
+function _multisite_aggregate_entity_delete($entity, $type) {
+  if (!multisite_aggregate_validate($type, $entity)) {
+    return;
+  }
+  list($id, , $bundle) = entity_extract_ids($type, $entity);
+
+  db_delete('multisite_aggregate')
+    ->condition('entity_id', $id)
+    ->condition('type', $type)
+    ->condition('bundle', $bundle)
+    ->condition('site', multisite_get_site_id())
+    ->execute();
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+function multisite_aggregate_entity_insert($entity, $type) {
+  _multisite_aggregate_entity_save($entity, $type);
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+function multisite_aggregate_entity_update($entity, $type) {
+  _multisite_aggregate_entity_save($entity, $type);
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+function multisite_aggregate_entity_delete($entity, $type) {
+  _multisite_aggregate_entity_delete($entity, $type);
+}

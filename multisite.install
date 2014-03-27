@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function multisite_schema() {
+  $schema['multisite'] = array(
+    'description' => 'The table of multisite instances',
+    'fields' => array(
+      'sid' => array(
+        'type' => 'serial',
+        'description' => 'The primary identifier for a multisite',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'description' => 'The name of this multisite',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'host' => array(
+        'type' => 'varchar',
+        'description' => 'The hostname of this multisite',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'db' => array(
+        'type' => 'varchar',
+        'description' => 'The database name of this multisite',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'description' => 'The {users}.uid of this multisite',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'host' => array('host'),
+      'uid' => array('uid'),
+    ),
+    'foreign keys' => array(
+      'multisite_author' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid')
+      ),
+    ),
+    'primary key' => array('sid'),
+  );
+
+  return $schema;
+}

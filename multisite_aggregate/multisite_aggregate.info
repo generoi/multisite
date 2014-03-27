@@ -1,0 +1,8 @@
+name = Multisite Aggregate
+description = TODO: Description of module
+dependencies[] = multisite
+dependencies[] = uuid
+package = custom
+core = 7.x
+
+files[] = handlers/multisite_aggregate_views_handler_relationship.inc

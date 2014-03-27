@@ -1,0 +1,118 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function multisite_aggregate_schema() {
+  $schema['multisite_aggregate'] = array(
+    'description' => 'Aggregated entities from multisites',
+    'fields' => array(
+      'aid' => array(
+        'type' => 'serial',
+        'description' => 'The primary identifier of the aggregate',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'entity_id' => array(
+        'description' => 'The primary identifier for the entity',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'type' => 'varchar',
+        'description' => 'The entity type',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'bundle' => array(
+        'type' => 'varchar',
+        'description' => 'The entities bundle',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'description' => 'The {users}.uid of this entities author',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'label' => array(
+        'type' => 'varchar',
+        'description' => 'The entities label',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'language' => array(
+        'type' => 'varchar',
+        'description' => 'The language of this entity',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'uri' => array(
+        'type' => 'varchar',
+        'description' => 'The uri of this entity',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'summary' => array(
+        'type' => 'varchar',
+        'description' => 'The summary of this entity',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'image' => array(
+        'type' => 'varchar',
+        'description' => 'The image of this entity',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'created' => array(
+        'type' => 'int',
+        'description' => 'The Unix timestamp when this entity was created.',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'type' => 'int',
+        'description' => 'The Unix timestamp when this entity was changed.',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'uuid' => uuid_schema_field_definition(),
+      'sid' => array(
+        'type' => 'int',
+        'description' => 'The {multisite}.sid that has this entity',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'changed' => array('changed'),
+      'created' => array('created'),
+      'language' => array('language'),
+      'uid' => array('uid'),
+      'id' => array('entity_id', 'type', 'bundle', 'sid'),
+    ),
+    'foreign keys' => array(
+      'multisite_sid' => array(
+        'table' => 'multisite',
+        'columns' => array('sid' => 'sid'),
+      ),
+      'entity_author' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+    'primary key' => array('aid'),
+  );
+
+  return $schema;
+}

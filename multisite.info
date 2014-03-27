@@ -1,0 +1,4 @@
+name = Multisite
+description = TODO: Description of module
+package = custom
+core = 7.x
