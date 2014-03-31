@@ -414,9 +414,12 @@ function _multisite_aggregate_entity_delete($entity, $type) {
   if (!($aggregate_type = multisite_aggregate_get_type_by_source($entity, $type))) {
     return;
   }
+  db_set_active('master');
   if ($aggregate = multisite_aggregate_load_by_uuid($entity->uuid)) {
-    entity_delete('multisite_aggregate', $aggregate);
+    entity_delete('multisite_aggregate', $aggregate->maid);
   }
+  // Connect back to this multisite
+  db_set_active('default');
 }
 
 /**
