@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function multisite_taxonomy_install() {
+  $table = 'taxonomy_term_data';
+  $schema = drupal_get_schema($table, TRUE);
+  foreach (array('msid') as $field) {
+    if (!empty($schema['fields'][$field])) {
+      if (!db_field_exists($table, $field)) {
+        db_add_field($table, $field, $schema['fields'][$field]);
+      }
+      else {
+        db_change_field($table, $field, $field, $schema['fields'][$field]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_schema_alter().
+ */
+function multisite_taxonomy_schema_alter(&$schema) {
+  $schema['taxonomy_term_data']['fields']['msid'] = array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function multisite_taxonomy_uninstall() {
+  if (db_field_exists('multisite_aggregate', 'msid')) {
+    db_drop_field('multisite_aggregate', 'msid');
+  }
+}

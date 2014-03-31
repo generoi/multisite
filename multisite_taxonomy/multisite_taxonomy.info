@@ -1,0 +1,6 @@
+name = Multisite Taxonomy
+description = TODO: Description of module
+dependencies[] = multisite
+dependencies[] = taxonomy
+package = multisite
+core = 7.x

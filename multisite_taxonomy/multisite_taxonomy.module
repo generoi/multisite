@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * Implements hook_taxonomy_term_presave().
+ */
+function multisite_taxonomy_taxonomy_term_presave($term) {
+  // Store the msid when a taxonomy term is saved.
+  if ($multisite = multisite_load_current()) {
+    $term->msid = $multisite->msid;
+  }
+}
+
+/**
+ * Implements hook_query_TAG_alter().
+ */
+function multisite_taxonomy_query_term_access_alter(QueryAlterableInterface $query) {
+  if ($multisite = multisite_load_current()) {
+    $query->condition('msid', array('0', $multisite->msid), 'IN');
+  }
+}
