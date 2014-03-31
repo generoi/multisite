@@ -1,4 +1,4 @@
 Multisite
 =========
 
-TODO: write some documentation.
+Warning this module required a lot of extra configuration.

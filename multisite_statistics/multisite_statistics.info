@@ -3,5 +3,6 @@ description = TODO: Description of module
 dependencies[] = multisite
 dependencies[] = statistics
 dependencies[] = multisite_aggregate
-package = custom
+dependencies[] = uuid
+package = multisite
 core = 7.x

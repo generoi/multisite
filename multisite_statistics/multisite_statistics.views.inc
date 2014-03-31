@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Implements hook_views_data_alter().
+ * Implements hook_views_data().
  */
-function multisite_statistics_views_data_alter(&$data) {
+function multisite_statistics_views_data() {
   $numeric_base = array(
     'field' => array(
       'handler' => 'views_handler_field_numeric',
@@ -33,16 +33,27 @@ function multisite_statistics_views_data_alter(&$data) {
     ),
   );
 
-  $data['multisite_aggregate']['daycount'] = $numeric_base + array(
+  $data['multisite_statistics']['table']['group'] = t('Multisite aggregate statistics');
+
+  $data['multisite_statistics']['table']['join'] = array(
+    'multisite_aggregate' => array(
+      'left_field' => 'maid',
+      'field' => 'maid',
+    ),
+  );
+
+  $data['multisite_statistics']['daycount'] = $numeric_base + array(
     'title' => t('Views today'),
     'help' => t('The total number of times the node has been viewed today.'),
   );
-  $data['multisite_aggregate']['totalcount'] = $numeric_base + array(
+  $data['multisite_statistics']['totalcount'] = $numeric_base + array(
     'title' => t('Total views'),
     'help' => t('The total number of times the node has been viewed.'),
   );
-  $data['multisite_aggregate']['timestamp'] = $date_base + array(
+  $data['multisite_statistics']['timestamp'] = $date_base + array(
     'title' => t('Most recent view'),
     'help' => t('The most recent time the node has been viewed.'),
   );
+
+return $data;
 }

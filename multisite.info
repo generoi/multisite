@@ -1,4 +1,11 @@
 name = Multisite
 description = TODO: Description of module
-package = custom
+package = multisite
 core = 7.x
+
+dependencies[] = entity
+dependencies[] = uuid
+
+files[] = handlers/views_handler_field_multisite_link_delete.inc
+files[] = handlers/views_handler_field_multisite_link_edit.inc
+files[] = handlers/views_handler_field_multisite_link.inc

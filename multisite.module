@@ -6,6 +6,21 @@
  */
 
 /**
+ * Multisite Entity
+ */
+include_once __DIR__ . '/multisite.inc';
+
+/**
+ * Stream wrapper
+ */
+include_once __DIR__ . '/multisite.stream.inc';
+
+/**
+ * Helpers mostly used during site setup.
+ */
+include_once __DIR__ . '/multisite.helpers.inc';
+
+/**
  * Implements hook_views_api().
  */
 function multisite_views_api() {
@@ -15,91 +30,356 @@ function multisite_views_api() {
 }
 
 /**
- * Get a multisite id (sid).
+ * Implements hook_stream_wrappers().
  *
- * @param $host (optional) the hostname of the multisite.
+ * Register a stream wrapper that can be used to access files across
+ * multisites.
  */
-function multisite_get_site_id($host = NULL) {
-  if (!isset($host)) {
-    $host = multisite_host();
-  }
-  $sites = &drupal_static(__FUNCTION__);
-  if (!isset($sites[$host])) {
-    $sites[$host] = multisite_load(array('host' => $host));
-  }
-  return isset($sites[$host]->sid) ? $sites[$host]->sid : NULL;
+function multisite_stream_wrappers() {
+  return array(
+    'root' => array(
+      'name' => t('Multisite root public files'),
+      'class' => 'MultisiteRootPublicStreamWrapper',
+      'description' => t('Files served by the webserver'),
+      'type' => STREAM_WRAPPERS_LOCAL_HIDDEN,
+    ),
+  );
 }
 
 /**
- * Get a multisite object.
- *
- * @param $conditions An associative array of conditions on the {multisite} table.
+ * Implements hook_menu().
  */
-function multisite_load($conditions = NULL) {
-  if (is_null($conditions)) {
-    $conditions = array('host' => multisite_host());
-  }
-  $query = db_select('multisite', 'm')
-    ->fields('m');
+function multisite_menu() {
+  $items['multisite/%multisite'] = array(
+    'title' => 'Multisite',
+    'page callback' => 'multisite_view_entity',
+    'page arguments' => array(1),
+    'access callback' => 'multisite_access',
+    'access arguments' => array('view', 1),
+  );
+  $items['admin/people/multisite/settings'] = array(
+    'title' => 'Global settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('multisite_admin_settings'),
+    'access arguments' => array('administer multisite'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'multisite.admin.inc',
+  );
+  return $items;
+}
 
-  foreach ($conditions as $column => $value) {
-    $query->condition($column, $value);
+/**
+ * Implements hook_permission().
+ */
+function multisite_permission() {
+  return array(
+    'administer multisite' => array(
+      'title' => t('Administer Multisite Settings'),
+      'restrict access' => TRUE,
+      'description' => t('Allows a user to administer multisite settings'),
+    ),
+    'administer multisite entities' => array(
+      'title' => t('Administer Multisite Entities'),
+      'restrict access' => TRUE,
+      'description' => t('Allows a user to administer multisite entities'),
+    ),
+    'view multisite entities' => array(
+      'title' => t('View Multisites'),
+      'description' => t('Allows a user to view multisite entities'),
+    ),
+    'view own multisite entities' => array(
+      'title' => t('View Own Multisites'),
+      'description' => t('Allows a user to view own multisite entities'),
+    ),
+    'edit own multisite entities' => array(
+      'title' => t('Edit Own Multisites'),
+      'description' => t('Allows a user to edit own multisite entities'),
+    ),
+    'delete own multisite entities' => array(
+      'title' => t('Delete Own Multisites'),
+      'description' => t('Allows a user to delete own multisite entities'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_entity_info().
+ */
+function multisite_entity_info() {
+  $info['multisite'] = array(
+    'label' => t('Multisite'),
+    'label callback' => 'multisite_label_callback',
+    'entity class' => 'Multisite',
+    'controller class' => 'MultisiteController',
+    'base table' => 'multisite',
+    'uri callback' => 'entity_class_uri',
+    'fieldable' => TRUE,
+    'entity keys' => array(
+      'id' => 'msid',
+      'label' => 'name',
+      'language' => 'language',
+    ),
+    'load hook' => 'multisite_load',
+    'static cache' => TRUE,
+    'admin ui' => array(
+      'path' => 'admin/people/multisite',
+      'controller class' => 'MultisiteUIController',
+      'file' => 'multisite.admin.inc',
+    ),
+    'module' => 'multisite',
+    'access callback' => 'multisite_access',
+    'bundles' => array(
+      'multisite' => array(
+        'label' => 'Multisite',
+        'admin' => array(
+          'path' => 'admin/people/multisite/manage',
+          'access arguments' => array('administer multisites'),
+        ),
+      ),
+    ),
+    'views controller class' => 'EntityDefaultViewsController',
+  );
+  return $info;
+}
+
+
+/**
+ * Implements hook_entity_property_info_alter().
+ */
+function multisite_entity_property_info_alter(&$info) {
+  $properties = &$info['multisite']['properties'];
+
+  $properties['msid'] = array(
+    'label' => t('Multisite ID'),
+    'type' => 'integer',
+    'description' => t("The unique ID of the multisite"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite entities',
+    'schema field' => 'msid',
+    'required' => TRUE,
+  );
+  $properties['name'] = array(
+    'label' => t('Multisite Name'),
+    'type' => 'text',
+    'description' => t("The site name of the multisite"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite entities',
+    'schema field' => 'name',
+  );
+  $properties['hostname'] = array(
+    'label' => t('Multisite Hostname'),
+    'type' => 'text',
+    'description' => t("The hostname of the multisite"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite entities',
+    'schema field' => 'hostname',
+  );
+  $properties['database_name'] = array(
+    'label' => t('Multisite Database'),
+    'type' => 'text',
+    'description' => t("The database name of the multisite"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite entities',
+    'schema field' => 'database_name',
+  );
+  $properties['language'] = array(
+    'label' => t('Multisite Language'),
+    'type' => 'token',
+    'description' => t("The language of the multisite"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'options list' => 'entity_metadata_language_list',
+    'setter permission' => 'administer multisite entities',
+    'schema field' => 'language',
+  );
+  $properties['profile'] = array(
+    'label' => t('Multisite Profile'),
+    'type' => 'text',
+    'description' => t("The installation profile of the multisite"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite entities',
+    'schema field' => 'profile',
+  );
+  $properties['uid'] = array(
+    'label' => t('Owner'),
+    'type' => 'user',
+    'description' => t("The unique ID of the user the multisite belongs to."),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite entities',
+    'clear' => array('user'),
+    'schema field' => 'uid',
+  );
+
+  $properties['created'] = array(
+    'label' => t('Date created'),
+    'description' => t('The date the multisite was created.'),
+    'type' => 'date',
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite entities',
+    'schema field' => 'created',
+  );
+  $properties['changed'] = array(
+    'label' => t('Date updated'),
+    'description' => t('The date the multisite was last updated.'),
+    'type' => 'date',
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite entities',
+    'schema field' => 'changed',
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Notify users on the multisite field ui page if there are tables which need
+ * to be shard.
+ *
+ * @see _multisite_check_fields_ui().
+ */
+function multisite_form_field_ui_field_overview_form_alter(&$form, $form_state) {
+  if ($form['#entity_type'] != 'multisite') {
+    return;
   }
-  $result = (object) $query->execute()->fetchAssoc();
-  return $result;
+  _multisite_check_fields_ui($form, $form_state);
 }
 
 /**
  * Implements hook_form_FORM_ID_alter().
  */
 function multisite_form_system_site_information_settings_alter(&$form, $form_state) {
+  // Save site name changes in the multisite entity as well.
   $form['#submit'][] = 'multisite_form_system_site_information_settings_submit';
 }
 
 /**
- * Submit handler to update multisite name.
+ * Submit handler to update multisite entities name.
  */
 function multisite_form_system_site_information_settings_submit($form, &$form_state) {
-  $multisite = multisite_load();
+  $multisite = multisite_load_current();
   $multisite->name = $form_state['values']['site_name'];
-  multisite_save($multisite);
+  $multisite->save();
 }
 
 /**
- * Save or update a multisite instance.
+ * Check access permission for Multisite Entity UI.
  */
-function multisite_save($multisite) {
-  if (isset($multisite->sid)) {
-    drupal_write_record('multisite', $multisite, 'sid');
+function multisite_access($op, $multisite = NULL, $account = NULL) {
+  if (!isset($account)) {
+    global $user;
+    $account = $user;
   }
-  else {
-    drupal_write_record('multisite', $multisite);
+  if (user_access('administer multisite entities', $account)) {
+    return TRUE;
   }
+  switch ($op) {
+    case 'view':
+      $access = user_access('view multisite entities', $account);
+      $own_access = is_object($multisite) && user_access('view own multisite entities', $account) && ($account->uid == $multisite->uid);
+      return $access || $own_access;
+    case 'create':
+      $access = user_access('create multisite entities', $account);
+      return $access;
+    case 'update':
+      $access = user_access('edit multisite entities', $account);
+      $own_access = is_object($multisite) && user_access('edit own multisite entities', $account) && ($account->uid == $multisite->uid);
+      return $access || $own_access;
+    case 'delete':
+      $access = user_access('delete multisite entities', $account);
+      $own_access = is_object($multisite) && user_access('delete own multisite entities', $account) && ($account->uid == $multisite->uid);
+      return $access || $own_access;
+  }
+  return FALSE;
 }
 
 /**
- * Delete a multisite instance.
+ * Helper function for custom queries.
  */
-function multisite_delete($sid) {
-  db_delete('multisite')->condition('sid', $sid)->execute();
+function multisite_entity_query($conditions = array()) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'multisite');
+  foreach ($conditions as $key => $value) {
+    $query->propertyCondition($key, $value);
+  }
+  $result = $query->execute();
+  $multisites = array();
+  if (isset($result['multisite'])) {
+    $multisites = array_keys($result['multisite']);
+  }
+  return $multisites;
 }
 
 /**
- * Implements hook_multisitecreate_profile_finalize().
+ * Label calback for multisite entities.
  */
-function multisite_multisitecreate_profile_finalize($form_state, $user) {
-  global $databases;
-
-  $multisite = array(
-    'name' => $form_state['values']['site_name'],
-    'host' => multisite_host(),
-    'db' => $databases['default']['default']['database'],
-    'uid' => $user->uid,
-  );
-  multisite_save($multisite);
+function multisite_label_callback($multisite, $type) {
+  return empty($multisite->name) ? 'Untitled multisite' : $multisite->name;
 }
 
-function multisite_host() {
+/**
+ * Saves multisites to the database
+ */
+function multisite_save(Multisite $multisite) {
+  return $multisite->save();
+}
+
+/**
+ * Multisite views redirect to the multisite.
+ * @TODO this should be removed as $entity->uri() is setup to use the path.
+ */
+function multisite_view_entity($multisite) {
   global $base_url;
-  return parse_url($base_url, PHP_URL_HOST);
+  $scheme = parse_url($base_url, PHP_URL_SCHEME);
+  $path = $scheme . '://' . $multisite->hostname;
+
+  drupal_goto($path, array('external' => TRUE));
+}
+
+/**
+ * Load a single multisite based on its id.
+ */
+function multisite_load($multisite_id, $reset = FALSE) {
+  $multisites = multisite_load_multiple(array($multisite_id), array(), $reset);
+  return reset($multisites);
+}
+
+function multisite_load_current($reset = FALSE) {
+  global $base_url;
+  $hostname = parse_url($base_url, PHP_URL_HOST);
+  return multisite_load_by_hostname($hostname, $reset);
+}
+
+/**
+ * Load a single multisite based on its hostname.
+ */
+function multisite_load_by_hostname($hostname, $reset = FALSE) {
+  $multisites = multisite_load_multiple(FALSE, array('hostname' => $hostname), $reset);
+  return reset($multisites);
+}
+
+/**
+ * Load multiple multisites belonging to a user id.
+ */
+function multisite_load_multiple_by_uid($uid, $reset = FALSE) {
+  return multisite_load_multiple(array(), array('uid' => $uid), $reset);
+}
+
+/**
+ * Load multiple multisites based on certain conditions.
+ */
+function multisite_load_multiple($multisite_ids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('multisite', $multisite_ids, $conditions, $reset);
+}
+
+/**
+ * Delete a multisite.
+ */
+function multisite_delete(Multisite $multisite) {
+  $multisite->delete();
+}
+
+/**
+ * Delete multiple multisites.
+ */
+function multisite_delete_multiple(array $multisite_ids) {
+  entity_get_controller('multisite')->delete($multisite_ids);
 }

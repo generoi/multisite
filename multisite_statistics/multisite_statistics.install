@@ -8,36 +8,55 @@ function multisite_statistics_install() {
   variable_set('statistics_count_content_views_ajax', 1);
   // Set module weight to run after core
   db_query("UPDATE {system} SET weight = 5 WHERE name = 'multisite_statistics' AND type = 'module'");
-
-  $table = 'multisite_aggregate';
-  $schema = drupal_get_schema($table, TRUE);
-  foreach (array('daycount', 'totalcount', 'timestamp') as $field) {
-    if (!empty($schema['fields'][$field])) {
-      if (!db_field_exists($table, $field)) {
-        db_add_field($table, $field, $schema['fields'][$field]);
-      }
-      else {
-        db_change_field($table, $field, $field, $schema['fields'][$field]);
-      }
-    }
-  }
 }
 
 /**
- * Implements hook_schema_alter().
+ * Implements hook_schema().
  */
-function multisite_statistics_schema_alter(&$schema) {
-  $schema['multisite_aggregate']['fields']['daycount'] = array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0);
-  $schema['multisite_aggregate']['fields']['totalcount'] = array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0);
-  $schema['multisite_aggregate']['fields']['timestamp'] = array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0);
+function multisite_statistics_schema() {
+  $schema['multisite_statistics'] = array(
+    'description' => 'Access statistics for {multisite_aggregate}s',
+    'fields' => array(
+      'maid' => array(
+        'type' => 'int',
+        'description' => 'The {multisite_aggregate}.maid for these statistics',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'totalcount' => array(
+        'type' => 'int',
+        'description' => 'The total number of times the {multisite_aggregate} has been viewed.',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'size' => 'big',
+        'default' => 0,
+      ),
+      'daycount' => array(
+        'type' => 'int',
+        'description' => 'The total number of times the {multisite_aggregate} has been viewed today.',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'size' => 'medium',
+        'default' => 0,
+      ),
+      'timestamp' => array(
+        'type' => 'int',
+        'description' => 'The most recent time the {multisite_aggregate} has been viewed.',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('maid'),
+  );
+
+  return $schema;
 }
 
 /**
  * Implements hook_uninstall().
  */
 function multisite_statistics_uninstall() {
-  db_drop_field('multisite_aggregate', 'daycount');
-  db_drop_field('multisite_aggregate', 'totalcount');
-  db_drop_field('multisite_aggregate', 'timestamp');
   variable_del('multisite_statistics_day_timestamp');
 }

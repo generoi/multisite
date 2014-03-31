@@ -1,8 +1,14 @@
 name = Multisite Aggregate
 description = TODO: Description of module
+dependencies[] = entity
 dependencies[] = multisite
 dependencies[] = uuid
-package = custom
+package = multisite
 core = 7.x
 
-files[] = handlers/multisite_aggregate_views_handler_relationship.inc
+files[] = multisite_aggregate.admin.inc
+files[] = multisite_aggregate_type.admin.inc
+
+files[] = handlers/views_handler_field_multisite_aggregate_link_delete.inc
+files[] = handlers/views_handler_field_multisite_aggregate_link_edit.inc
+files[] = handlers/views_handler_field_multisite_aggregate_link.inc

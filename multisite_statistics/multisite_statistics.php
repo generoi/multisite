@@ -16,10 +16,10 @@ include_once DRUPAL_ROOT . '/includes/bootstrap.inc';
 drupal_bootstrap(DRUPAL_BOOTSTRAP_VARIABLES);
 if (variable_get('statistics_count_content_views', 0) && variable_get('statistics_count_content_views_ajax', 0)) {
   $nid = $_POST['nid'];
-  $aid = $_POST['aid'];
-  if (is_numeric($aid)) {
-    db_merge('multisite_aggregate')
-      ->key(array('aid' => $aid))
+  $maid = $_POST['maid'];
+  if (is_numeric($maid)) {
+    db_merge('multisite_statistics')
+      ->key(array('maid' => $maid))
       ->fields(array(
         'daycount' => 1,
         'totalcount' => 1,

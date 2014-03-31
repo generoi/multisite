@@ -5,9 +5,9 @@
  */
 function multisite_schema() {
   $schema['multisite'] = array(
-    'description' => 'The table of multisite instances',
+    'description' => 'The table of multisite entitie',
     'fields' => array(
-      'sid' => array(
+      'msid' => array(
         'type' => 'serial',
         'description' => 'The primary identifier for a multisite',
         'unsigned' => TRUE,
@@ -20,14 +20,14 @@ function multisite_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
-      'host' => array(
+      'hostname' => array(
         'type' => 'varchar',
         'description' => 'The hostname of this multisite',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
-      'db' => array(
+      'database_name' => array(
         'type' => 'varchar',
         'description' => 'The database name of this multisite',
         'length' => 255,
@@ -36,23 +36,117 @@ function multisite_schema() {
       ),
       'uid' => array(
         'type' => 'int',
-        'description' => 'The {users}.uid of this multisite',
+        'description' => 'The {users}.uid owner of this multisite',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Created timestamp',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'Changed timestamp',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'language' => array(
+        'description' => 'The {languages}.language of this multisite.',
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'profile' => array(
+        'description' => 'The profile used while instaling this site.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'indexes' => array(
+      'hostname' => array('hostname'),
+      'name' => array('name'),
+      'uid' => array('uid'),
+      'language' => array('language'),
+    ),
+    'foreign keys' => array(
+      'author' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+    'primary key' => array('msid'),
+  );
+
+  $schema['multisite_process'] = array(
+    'description' => 'Multisite installations in process',
+    'fields' => array(
+      'id' => array(
+        'type' => 'serial',
+        'description' => 'The primary identifier for a multisite process',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'msid' => array(
+        'type' => 'int',
+        'description' => 'The primary identifier for a multisite process',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'private_key' => array(
+        'type' => 'char',
+        'length' => 32,
+        'description' => 'The private key for this process',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'description' => 'The {users}.uid who initialized this process',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Created timestamp',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'completed' => array(
+        'description' => 'Completed timestamp',
+        'type' => 'int',
         'not null' => TRUE,
         'default' => 0,
       ),
     ),
     'indexes' => array(
-      'host' => array('host'),
+      'private_key' => array('private_key'),
       'uid' => array('uid'),
     ),
     'foreign keys' => array(
-      'multisite_author' => array(
+      'author' => array(
         'table' => 'users',
         'columns' => array('uid' => 'uid')
       ),
+      'multisite' => array(
+        'table' => 'multisite',
+        'columns' => array('msid' => 'msid')
+      ),
     ),
-    'primary key' => array('sid'),
+    'primary key' => array('id'),
   );
 
   return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function multisite_uninstall() {
+  // db_query("DELETE FROM {variable} WHERE name LIKE 'multisite_%%'");
 }

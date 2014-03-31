@@ -4,92 +4,65 @@
  * Implements hook_schema().
  */
 function multisite_aggregate_schema() {
+  module_load_include('install', 'uuid', 'uuid');
   $schema['multisite_aggregate'] = array(
     'description' => 'Aggregated entities from multisites',
     'fields' => array(
-      'aid' => array(
+      'maid' => array(
         'type' => 'serial',
         'description' => 'The primary identifier of the aggregate',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
+      'type' => array(
+        'type' => 'varchar',
+        'description' => 'The {multisite_aggregate_type}.type of this aggregate',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
       'entity_id' => array(
-        'description' => 'The primary identifier for the entity',
+        'description' => 'The primary identifier for the aggregated entity',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
-      'type' => array(
-        'type' => 'varchar',
-        'description' => 'The entity type',
-        'length' => 32,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'bundle' => array(
-        'type' => 'varchar',
-        'description' => 'The entities bundle',
-        'length' => 32,
-        'not null' => TRUE,
-        'default' => '',
-      ),
       'uid' => array(
         'type' => 'int',
-        'description' => 'The {users}.uid of this entities author',
+        'description' => 'The {users}.uid of the aggregated entities author',
         'not null' => TRUE,
         'default' => 0,
       ),
-      'label' => array(
+      'title' => array(
         'type' => 'varchar',
-        'description' => 'The entities label',
+        'description' => 'The aggregated entities label',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'language' => array(
         'type' => 'varchar',
-        'description' => 'The language of this entity',
+        'description' => 'The aggregated entities language',
         'length' => 12,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'uri' => array(
-        'type' => 'varchar',
-        'description' => 'The uri of this entity',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'summary' => array(
-        'type' => 'varchar',
-        'description' => 'The summary of this entity',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'image' => array(
-        'type' => 'varchar',
-        'description' => 'The image of this entity',
-        'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'created' => array(
         'type' => 'int',
-        'description' => 'The Unix timestamp when this entity was created.',
+        'description' => 'The Unix timestamp when the aggregated entity was created',
         'not null' => TRUE,
         'default' => 0,
       ),
       'changed' => array(
         'type' => 'int',
-        'description' => 'The Unix timestamp when this entity was changed.',
+        'description' => 'The Unix timestamp when the aggregated entity was changed',
         'not null' => TRUE,
         'default' => 0,
       ),
       'uuid' => uuid_schema_field_definition(),
-      'sid' => array(
+      'msid' => array(
         'type' => 'int',
-        'description' => 'The {multisite}.sid that has this entity',
+        'description' => 'The {multisite}.msid that the aggregated entity belongs to',
         'not null' => TRUE,
         'default' => 0,
       ),
@@ -99,19 +72,78 @@ function multisite_aggregate_schema() {
       'created' => array('created'),
       'language' => array('language'),
       'uid' => array('uid'),
-      'id' => array('entity_id', 'type', 'bundle', 'sid'),
+      'type' => array('type'),
+      'msid' => array('msid'),
     ),
     'foreign keys' => array(
-      'multisite_sid' => array(
+      'multisite' => array(
         'table' => 'multisite',
-        'columns' => array('sid' => 'sid'),
+        'columns' => array('msid' => 'msid'),
       ),
       'entity_author' => array(
         'table' => 'users',
         'columns' => array('uid' => 'uid'),
       ),
     ),
-    'primary key' => array('aid'),
+    'primary key' => array('maid'),
+  );
+
+  $schema['multisite_aggregate_type'] = array(
+    'description' => 'Stores information about defined multisite aggregate types',
+    'fields' => array(
+      'id' => array(
+        'type' => 'serial',
+        'description' => 'The primary identifier of the aggregate type',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'type' => 'varchar',
+        'description' => 'The machine-readable name of this aggregate type',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'label' => array(
+        'description' => 'The human-readable name of this aggregate type',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'weight' => array(
+        'type' => 'int',
+        'description' => 'The weight of this aggregate type in relation to others.',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+      ),
+      'source_type' => array(
+        'description' => 'The aggregated entities entity type',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'source_bundle' => array(
+        'description' => 'The aggregated entities entity bundle',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'source_fields' => array(
+        'description' => 'The field mappings between aggregate and the aggregated entity',
+        'type' => 'blob',
+        'not null' => TRUE,
+        'size' => 'big',
+        'serialize' => TRUE,
+      ),
+    ) + entity_exportable_schema_fields(),
+    'unique keys' => array(
+      'type' => array('type'),
+    ),
+    'primary key' => array('id'),
   );
 
   return $schema;

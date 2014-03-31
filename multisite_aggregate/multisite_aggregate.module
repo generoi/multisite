@@ -6,6 +6,16 @@
  */
 
 /**
+ * MultisiteAggregate entities
+ */
+include_once __DIR__ . '/multisite_aggregate.inc';
+
+/**
+ * Display Suite integration
+ */
+include_once __DIR__ . '/multisite_aggregate.ds.inc';
+
+/**
  * Implements hook_views_api().
  */
 function multisite_aggregate_views_api() {
@@ -15,200 +25,412 @@ function multisite_aggregate_views_api() {
 }
 
 /**
- * Check whether an entity can be aggregated.
+ * Implements hook_entity_info().
  */
-function multisite_aggregate_validate($type, $entity) {
-  foreach (module_implements('multisite_aggregate_validate') as $module) {
-    $function = $module . '_multisite_aggregate_validate';
-    if (!$function($type, $entity)) {
-      return FALSE;
-    }
-  }
-
-  return TRUE;
-}
-
-/**
- * Implements hook_multisite_aggregate_validate().
- */
-function multisite_aggregate_multisite_aggregate_validate($type, $entity) {
-  list(,, $bundle) = entity_extract_ids($type, $entity);
-  $valid_types = variable_get('multisite_aggregate_types', array());
-
-  if (!in_array($type, array_keys($valid_types))) {
-    return FALSE;
-  }
-  if (!in_array($bundle, $valid_types[$type])) {
-    return FALSE;
-  }
-  switch ($type) {
-    case 'node':
-      if ($entity->status == NODE_NOT_PUBLISHED) {
-        return FALSE;
-      }
-      break;
-  }
-  return TRUE;
-}
-
-function multisite_aggregate_get_content($entity_type, $entity, $field, $display = NULL) {
-  $value = '';
-  $context = array(
-    'entity_type' => $entity_type,
-    'entity' => $entity,
-    'field_name' => $field,
-    'display' => $display,
+function multisite_aggregate_entity_info() {
+  $info['multisite_aggregate'] = array(
+    'label' => t('Multisite Aggregate'),
+    'label callback' => 'multisite_aggregate_label_callback',
+    'entity class' => 'MultisiteAggregate',
+    'controller class' => 'MultisiteAggregateController',
+    'base table' => 'multisite_aggregate',
+    'load hook' => 'multisite_aggregate_load',
+    'uri callback' => 'entity_class_uri',
+    'fieldable' => TRUE,
+    'entity keys' => array(
+      'id' => 'maid',
+      'label' => 'title',
+      'language' => 'language',
+      'bundle' => 'type',
+    ),
+    'admin ui' => array(
+      'path' => 'admin/content/multisite_aggregates',
+      'controller class' => 'MultisiteAggregateUIController',
+      'file' => 'multisite_aggregate.admin.inc',
+      'menu wildcard' => '%multisite_aggregate',
+    ),
+    'module' => 'multisite_aggregate',
+    'access callback' => 'multisite_aggregate_access',
+    'bundles' => array(),
+    'bundle keys' => array(
+      'bundle' => 'type',
+    ),
   );
-  drupal_alter('multisite_aggregate_content', $value, $context);
-  return $value;
+  // The entity that holds information about the entity types
+  $info['multisite_aggregate_type'] = array(
+    'label' => t('Multisite aggregate type'),
+    'entity class' => 'MultisiteAggregateType',
+    'controller class' => 'MultisiteAggregateTypeController',
+    'base table' => 'multisite_aggregate_type',
+    'fieldable' => FALSE,
+    'bundle of' => 'multisite_aggregate',
+    'exportable' => TRUE,
+    'entity keys' => array(
+      'id' => 'id',
+      'name' => 'type',
+      'label' => 'label',
+    ),
+    'access callback' => 'multisite_aggregate_type_access',
+    'module' => 'multisite_aggregate',
+    'admin ui' => array(
+      'path' => 'admin/structure/multisite_aggregate_types',
+      'file' => 'multisite_aggregate_type.admin.inc',
+      'controller class' => 'MultisiteAggregateTypeUIController',
+    ),
+  );
+
+  $types = db_select('multisite_aggregate_type', 't')
+    ->fields('t')
+    ->execute()
+    ->fetchAllAssoc('type');
+
+  foreach ($types as $type => $type_info) {
+    $info['multisite_aggregate']['bundles'][$type] = array(
+      'label' => $type_info->label,
+      'admin' => array(
+        'path' => 'admin/structure/multisite_aggregate_types/manage/%multisite_aggregate_type',
+        'real path' => 'admin/structure/multisite_aggregate_types/manage/' . $type,
+        'bundle argument' => 4,
+        'access arguments' => array('administer multisite aggregate types'),
+      ),
+    );
+  }
+  return $info;
 }
 
 /**
- * Implements hook_multisite_aggregate_content_alter().
+ * Implements hook_entity_property_info_alter().
  */
-function multisite_aggregate_multisite_aggregate_content_alter(&$value, $context) {
-  $entity_type = $context['entity_type'];
-  $entity = $context['entity'];
-  $field_name = $context['field_name'];
-  $display = $context['display'];
+function multisite_aggregate_entity_property_info_alter(&$info) {
+  $properties = &$info['multisite_aggregate']['properties'];
 
-  $field_info = field_info_field($field_name);
-  // Render the `field_image` using teaser display mode on nodes.
-  if ($field = field_get_items($entity_type, $entity, $field_name)) {
-    switch ($field_info['type']) {
-      case 'image':
-        $fid = $field[0]['fid'];
-        $file = file_load($fid);
-        // @TODO image style?
-        $value = file_create_url($file->uri);
-        break;
-      default:
-        $build = field_view_value($entity_type, $entity, $field_name, $field[0], $display);
-        $value = render($build);
-        break;
+  $properties['maid'] = array(
+    'label' => t('Multisite Aggregate ID'),
+    'type' => 'int',
+    'description' => t("The unique ID of the aggregate"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite aggregates',
+    'schema field' => 'maid',
+  );
+  $properties['entity_id'] = array(
+    'label' => t('Aggregated Entity ID'),
+    'type' => 'int',
+    'description' => t("The unique ID of the aggregated entity"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite aggregates',
+    'schema field' => 'entity_id',
+  );
+  $properties['title'] = array(
+    'label' => t('Aggregated Entity Title'),
+    'type' => 'text',
+    'description' => t("The title of the aggregated entity"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite aggregates',
+    'schema field' => 'title',
+  );
+  $properties['language'] = array(
+    'label' => t('Aggregated Entity Language'),
+    'type' => 'token',
+    'description' => t("The language of the aggregated entity"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'options list' => 'entity_metadata_language_list',
+    'setter permission' => 'administer multisite aggregates',
+    'schema field' => 'language',
+  );
+  $properties['uid'] = array(
+    'label' => t('Author'),
+    'type' => 'user',
+    'description' => t("The unique ID of the aggregated entities author"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite aggregates',
+    'clear' => array('user'),
+    'schema field' => 'uid',
+  );
+  $properties['name'] = array(
+    'label' => t('Author name'),
+    'type' => 'text',
+    'description' => t("The username of the author"),
+    'getter callback' => 'multisite_aggregate_get_username',
+    'computed' => TRUE,
+  );
+  $properties['msid'] = array(
+    'label' => t('Multisite'),
+    'type' => 'multisite',
+    'description' => t("The unique ID of the aggregated entities multisite"),
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite aggregates',
+    'schema field' => 'msid',
+  );
+
+  $properties['created'] = array(
+    'label' => t('Date created'),
+    'description' => t('The date the aggregated entity was created.'),
+    'type' => 'date',
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite aggregates',
+    'schema field' => 'created',
+  );
+  $properties['changed'] = array(
+    'label' => t('Date updated'),
+    'description' => t('The date the aggregated entity was last updated.'),
+    'type' => 'date',
+    'setter callback' => 'entity_property_verbatim_set',
+    'setter permission' => 'administer multisite aggregates',
+    'schema field' => 'changed',
+  );
+}
+
+
+
+/**
+ * Implements hook_permission().
+ */
+function multisite_aggregate_permission() {
+  $permissions = array(
+    'administer multisite aggregate types' => array(
+      'title' => t('Administer Multisite Aggregate Types'),
+      'description' => t('Create and delete fields for multisite aggregate types, and set their permissions.'),
+    ),
+    'administer multisite aggregates' => array(
+      'title' => t('Administer Multisite Aggregates'),
+      'description' => t('Edit and delete all multisite aggregates.'),
+    ),
+  );
+  foreach (multisite_aggregate_get_types() as $type) {
+    $type_name = check_plain($type->type);
+    $permissions += array(
+      "view any $type_name multisite aggregate" => array(
+        'title' => t('%type_name: View any multisite aggregate', array('%type_name' => $type->label)),
+        ),
+      );
+  }
+  return $permissions;
+}
+
+/**
+ * Implements hook_multisite_aggregate_load().
+ *
+ * Attach the author and the multisite to the aggregate so it can be used in
+ * contrib modules such as DS.
+ */
+function multisite_aggregate_multisite_aggregate_load($aggregates) {
+  $uids = array();
+  $msids = array();
+  foreach ($aggregates as $maid => $aggregate) {
+    $uids[] = $aggregate->uid;
+    $msids[] = $aggregate->msid;
+  }
+
+  array_unique($uids);
+  array_unique($msids);
+  $users = user_load_multiple($uids);
+  $multisites = multisite_load_multiple($msids);
+
+  foreach ($aggregates as $maid => $aggregate) {
+    if (isset($users[$aggregate->uid])) {
+      $aggregate->user = $users[$aggregate->uid];
+      $aggregate->name = $aggregate->user->name;
+    }
+    if (isset($multisites[$aggregate->msid])) {
+      $aggregate->multisite = $multisites[$aggregate->msid];
     }
   }
 }
 
 /**
- * Get a signle aggregate
+ * Implements hook_form_field_ui_field_overview_form_alter().
+ *
+ * Notify the user about shared tables on the Fields UI page.
  */
-function multisite_aggregate_load($conditions) {
-  $aggregates = multisite_aggregate_load_multiple($conditions);
-  return $aggregates ? reset($aggregates) : FALSE;
-}
-
-/**
- * Load multiple aggregates.
- */
-function multisite_aggregate_load_multiple($conditions = array()) {
-  $query = db_select('multisite_aggregate', 'ma')
-    ->fields('ma');
-  foreach ($conditions as $column => $value) {
-    $query->condition($column, $value);
-  }
-  $result = $query->execute()->fetchAllAssoc('aid');
-  foreach ($result as $key => $aggregate) {
-    $result[$key] = (object) $aggregate;
-  }
-  return $result;
-}
-
-/**
- * Save an entity as an aggregate.
- */
-function _multisite_aggregate_entity_save($entity, $type) {
-  if (!multisite_aggregate_validate($type, $entity)) {
+function multisite_aggregate_form_field_ui_field_overview_form_alter(&$form, $form_state) {
+  if ($form['#entity_type'] != 'multisite_aggregate') {
     return;
   }
-  list($id, , $bundle) = entity_extract_ids($type, $entity);
-
-  $sid = multisite_get_site_id();
-  $aggregate = multisite_aggregate_load(array(
-    'type' => $type,
-    'bundle' => $bundle,
-    'entity_id' => $id,
-    'sid' => $sid,
-  ));
-  $is_update = isset($aggregate->aid);
-
-  $uri = entity_uri($type, $entity);
-  $new_aggregate = array(
-    'type' => $type,
-    'bundle' => $bundle,
-    'entity_id' => $id,
-    'uid' => isset($entity->uid) ? $entity->uid : 0,
-    'label' => entity_label($type, $entity),
-    'language' => entity_language($type, $entity),
-    'uri' => $uri['path'],
-    'summary' => multisite_aggregate_get_content($type, $entity, 'body', 'teaser'),
-    'image' => multisite_aggregate_get_content($type, $entity, 'field_image', 'teaser'),
-    'created' => isset($aggregate->created) ? $aggregate->created : REQUEST_TIME,
-    'changed' => REQUEST_TIME,
-    'uuid' => isset($entity->uuid) ? $entity->uuid : '',
-    'sid' => $sid,
-  );
-  if ($is_update) {
-    $new_aggregate['aid'] = $aggregate->aid;
-  }
-  $new_aggregate['summary'] = drupal_substr($new_aggregate['summary'], 0, 255);
-  // If the image path is longer than 255, we cant store it in varchar
-  if (drupal_strlen($new_aggregate['image']) > 255) {
-    $new_aggregate['image'] = NULL;
-  }
-
-  module_invoke_all('multisite_aggregate_save_entity', $new_aggregate);
-  if ($is_update) {
-    drupal_write_record('multisite_aggregate', $new_aggregate, 'aid');
-  }
-  else {
-    drupal_write_record('multisite_aggregate', $new_aggregate);
-  }
+  _multisite_check_fields_ui($form, $form_state);
 }
+
 /**
- * Remove an aggregated item.
+ * Implements hook_form_field_ui_field_edit_form_alter().
+ *
+ * Add an option to select source field when editing a field belonging to a
+ * multisite aggregate type.
+ */
+function multisite_aggregate_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
+  $entity_types = array();
+  $aggregate_field_name = $form['#field']['field_name'];
+  foreach ($form['#field']['bundles'] as $entity_type => $bundles) {
+    $entity_types[$entity_type] = $bundles;
+  }
+  if (!in_array('multisite_aggregate', array_keys($entity_types))) {
+    return;
+  }
+  // Notify the user if this field is used elsewhere
+  if (count($entity_types['multisite_aggregate']) > 1) {
+    drupal_set_message(t('This field is used by mutiple multisite aggregation bundles, this is not allowed!'), 'error');
+    return;
+  }
+  if (count($entity_types) > 1) {
+    drupal_set_message(t('This field is used both for multisite aggregation and regular entities, this is not allowed!'), 'error');
+    return;
+  }
+
+  $aggregate_type = multisite_aggregate_get_types($entity_types['multisite_aggregate'][0]);
+  $source_fields = array('' => '');
+  $fields = field_info_instances($aggregate_type->source_type, $aggregate_type->source_bundle);
+  foreach ($fields as $field_name => $value) {
+    $field_info = field_info_field($field_name);
+    if ($field_info['type'] == $form['#field']['type']) {
+      $source_fields[$field_name] = $value['label'];
+    }
+  }
+  $form_state['multisite_aggregate_type'] = $aggregate_type;
+
+  $form['field']['multisite_aggregate_map'] = array(
+    '#type' => 'select',
+    '#title' => t('Aggregated field'),
+    '#description' => t('Select the source entities mapping field.'),
+    '#options' =>  $source_fields,
+    '#default_value' => isset($aggregate_type->source_fields[$aggregate_field_name]) ? $aggregate_type->source_fields[$aggregate_field_name] : '',
+  );
+  $form['#submit'][] = 'multisite_aggregate_field_map_submit';
+}
+
+/**
+ * Callback for storing the field mappings on the aggregate type entity.
+ */
+function multisite_aggregate_field_map_submit($form, $form_state) {
+  $aggregate_type = $form_state['multisite_aggregate_type'];
+  $aggregate_field = $form['#field']['field_name'];
+  $map_field = $form_state['values']['field']['multisite_aggregate_map'];
+  $aggregate_type->source_fields[$aggregate_field] = $map_field;
+  $aggregate_type->save();
+}
+
+/**
+ * Update or insert a new aggregate entity based on a source entity.
+ */
+function _multisite_aggregate_entity_save($entity, $type, $op) {
+  // Exit if no configured aggregate type exists.
+  if (!($aggregate_type = multisite_aggregate_get_type_by_source($entity, $type))) {
+    return;
+  }
+  // Exit if this isnt a multisite.
+  if (!($multisite = multisite_load_current())) {
+    return;
+  }
+  // Make sure we dont manipulate the source entity
+  $entity = clone $entity;
+
+  // Connect to database of the master multisite.
+  field_info_cache_clear();
+  db_set_active('master');
+
+  // Delete unpublished nodes.
+  // @TODO introduce a status property like node entities.
+  if ($type == 'node' && $entity->status == NODE_NOT_PUBLISHED) {
+    return _multisite_aggregate_entity_delete($entity, $type);
+  }
+
+  // Load existing or create new aggregate object.
+  if (!($aggregate = multisite_aggregate_load_by_uuid($entity->uuid))) {
+    $aggregate = entity_create('multisite_aggregate', array());
+  }
+
+  // Update property fields
+  $aggregate->title = entity_label($type, $entity);
+  $aggregate->changed = REQUEST_TIME;
+  $aggregate->created = isset($entity->created) ? $entity->created : REQUEST_TIME;
+  $aggregate->uid = isset($entity->uid) ? $entity->uid : $multisite->uid;
+  $aggregate->language = entity_language($type, $entity);
+  $aggregate->uuid = $entity->uuid;
+  $aggregate->msid = $multisite->msid;
+  $aggregate->entity_id = entity_id($type, $entity);
+  $aggregate->type = $aggregate_type->type;
+  // Trigger a save so we get the id for file usage.
+  $aggregate->save();
+
+  // Iterate over the source fields and add them to the aggregate.
+  foreach ($aggregate_type->source_fields as $aggregate_field => $source_field) {
+    if (!isset($entity->$source_field)) {
+      continue;
+    }
+    $field_info = field_info_field($source_field);
+
+    switch ($field_info['type']) {
+      // If the file_managed table is individual, we need to switch databases
+      // and reinsert the file objects into the database.
+      case 'image':
+        if (_multisite_is_shared_table('file_managed')) {
+          continue;
+        }
+        $langcode = field_language($type, $entity, $source_field);
+        if ($field_items = field_get_items($type, $entity, $source_field)) {
+          $files = array();
+          // Connect back to the current site so we can load the file objects.
+          db_set_active('default');
+          // Create an array of files to add to the database.
+          foreach ($field_items as $idx => $field_item) {
+            $file = clone file_load($field_item['fid']);
+            $file_path = str_replace('public://', '', $file->uri);
+            $files[$file->fid] = clone $file;
+            $files[$file->fid]->fid = NULL;
+            // Replace the uri with the `root://` stream wrapper
+            $files[$file->fid]->uri = _multisite_get_stream_path($file_path);
+          }
+          // Back to master again
+          db_set_active('master');
+          $idx = 0;
+
+          // Save the files into the master database.
+          foreach ($files as $source_fid => $file) {
+            $query = new EntityFieldQuery();
+            // If the uri exists, use its fid instead of creating a new one.
+            $result = $query->entityCondition('entity_type', 'file')
+              ->propertyCondition('uri', $file->uri)
+              ->execute();
+
+            if (isset($result['file'])) {
+              $fids = array_keys($result['file']);
+              $file->fid = reset($fids);
+            }
+            $file = file_save($file);
+            $entity->{$source_field}[$langcode][$idx++]['fid'] = $file->fid;
+          }
+        }
+        break;
+    }
+    $aggregate->{$aggregate_field} = $entity->$source_field;
+  }
+
+  $aggregate->save();
+  // Connect back to this multisites
+  db_set_active('default');
+}
+
+/**
+ * Delete a multisite aggregate when its source is deleted.
  */
 function _multisite_aggregate_entity_delete($entity, $type) {
-  if (!multisite_aggregate_validate($type, $entity)) {
+  if (!($aggregate_type = multisite_aggregate_get_type_by_source($entity, $type))) {
     return;
   }
-  list($id, , $bundle) = entity_extract_ids($type, $entity);
-
-  db_delete('multisite_aggregate')
-    ->condition('entity_id', $id)
-    ->condition('type', $type)
-    ->condition('bundle', $bundle)
-    ->condition('site', multisite_get_site_id())
-    ->execute();
-}
-
-/**
- * Get aggregate id from entity
- */
-function multisite_aggregate_entity_aid($type, $entity) {
-  list($id, , $bundle) = entity_extract_ids($type, $entity);
-  $sid = multisite_get_site_id();
-  $aggregate = multisite_aggregate_load(array(
-    'type' => $type,
-    'bundle' => $bundle,
-    'entity_id' => $id,
-    'sid' => $sid,
-  ));
-  return isset($aggregate->aid) ? $aggregate->aid : FALSE;
+  if ($aggregate = multisite_aggregate_load_by_uuid($entity->uuid)) {
+    entity_delete('multisite_aggregate', $aggregate);
+  }
 }
 
 /**
  * Implements hook_entity_insert().
  */
 function multisite_aggregate_entity_insert($entity, $type) {
-  _multisite_aggregate_entity_save($entity, $type);
+  _multisite_aggregate_entity_save($entity, $type, 'insert');
 }
 
 /**
  * Implements hook_entity_update().
  */
 function multisite_aggregate_entity_update($entity, $type) {
-  _multisite_aggregate_entity_save($entity, $type);
+  _multisite_aggregate_entity_save($entity, $type, 'update');
 }
 
 /**
@@ -216,4 +438,138 @@ function multisite_aggregate_entity_update($entity, $type) {
  */
 function multisite_aggregate_entity_delete($entity, $type) {
   _multisite_aggregate_entity_delete($entity, $type);
+}
+
+/**
+ * Check access permission for Multisite Aggregates
+ */
+function multisite_aggregate_access($op, $model = NULL, $account = NULL) {
+  if (user_access('administer multisite aggregates', $account)) {
+    return TRUE;
+  }
+  if (isset($model) && $type_name = $model->type) {
+    $op = ($op == 'view') ? 'view' : 'edit';
+    if (user_access("$op any $type_name model", $account)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Access callback for the Entity API
+ */
+function multisite_aggregate_type_access($op, $type = null, $account = NULL) {
+  return user_access('administer multisite aggregate types', $account);
+}
+
+/**
+ * Gets an array of multisite aggregate types, keyed by type name.
+ */
+function multisite_aggregate_get_types($type_name = NULL) {
+  $types = entity_load_multiple_by_name('multisite_aggregate_type', isset($type_name) ? array($type_name) : FALSE);
+  return isset($type_name) ? reset($types) : $types;
+}
+
+/**
+ * Get a multisite aggregate type based on a source entity or return FALSE if
+ * none is configured.
+ */
+function multisite_aggregate_get_type_by_source($entity, $type) {
+  $query = new EntityFieldQuery();
+  list(,,$bundle) = entity_extract_ids($type, $entity);
+  $aggregate_types = $query->entityCondition('entity_type', 'multisite_aggregate_type')
+    ->propertyCondition('source_type', $type)
+    ->propertyCondition('source_bundle', $bundle)
+    ->execute();
+
+  if (isset($aggregate_types['multisite_aggregate_type'])) {
+    $ids = array_keys($aggregate_types['multisite_aggregate_type']);
+    $aggregate_types = multisite_aggregate_type_load_multiple($ids);
+    return reset($aggregate_types);
+  }
+  return FALSE;
+}
+
+/**
+ * Menu argument loader; Load a multisite aggregate by string.
+ */
+function multisite_aggregate_type_load($type) {
+  return multisite_aggregate_get_types($type);
+}
+
+/**
+ * Load multiple multisite aggregates based on certain conditions.
+ */
+function multisite_aggregate_type_load_multiple($ids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('multisite_aggregate_type', $ids, $conditions, $reset);
+}
+
+/**
+ * Fetch a multisite aggregate object.
+ */
+function multisite_aggregate_load($id, $reset = FALSE) {
+  $aggregates = multisite_aggregate_load_multiple(array($id), array(), $reset);
+  return reset($aggregates);
+}
+
+function multisite_aggregate_load_by_uuid($uuid, $reset = FALSE) {
+  $aggregates = multisite_aggregate_load_multiple(FALSE, array('uuid' => $uuid), $reset);
+  return reset($aggregates);
+}
+
+/**
+ * Load multiple multisite aggregates based on certaion conditions.
+ */
+function multisite_aggregate_load_multiple($ids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('multisite_aggregate', $ids, $conditions, $reset);
+}
+
+/**
+ * Deletes a multisite aggregate.
+ */
+function multisite_aggregate_delete(MultisiteAggregate $aggregate) {
+  $aggregate->delete();
+}
+
+/**
+ * Delete multiple multisite aggregates.
+ */
+function multisite_aggregate_delete_multiple(array $ids) {
+  entity_get_controller('multisite_aggregate')->delete($ids);
+}
+
+/**
+ * Create a multisite aggregate object.
+ */
+function multisite_aggregate_create($values = array()) {
+  return entity_get_controller('multisite_aggregate')->create($values);
+}
+
+/**
+ * Saves a multisite aggregate to the database.
+ */
+function multisite_aggregate_save($aggregate) {
+  return entity_save('multisite_aggregate', $aggregate);
+}
+
+/**
+ * Saves a multisite aggrgate type to the database.
+ */
+function multisite_aggregate_type_save($type) {
+  return entity_save('multisite_aggregate_type', $type);
+}
+
+/**
+ * Deletes a multisite aggregate type from the database.
+ */
+function multisite_aggregate_type_delete(MultisiteAggregateType $type) {
+  $type->delete();
+}
+
+/**
+ * URI Callback for multisite aggregates.
+ */
+function multisite_aggregate_uri(MultisiteAggregate $aggregate) {
+  return $aggregate->uri();
 }
