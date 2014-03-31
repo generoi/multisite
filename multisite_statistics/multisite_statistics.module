@@ -25,9 +25,10 @@ function multisite_statistics_node_view($node, $view_mode) {
     foreach ($js as $key => $data) {
       if (isset($data['data']['statistics'])) {
         // This only runs once per page so the single load call should be fine.
-        $aggregate = multisite_aggregate_load_by_uuid($node->uuid);
-        $js[$key]['data']['statistics']['url'] = url(drupal_get_path('module', 'multisite_statistics') . '/multisite_statistics.php');
-        $js[$key]['data']['statistics']['data']['maid'] = $aggregate->maid;
+        if ($aggregate = multisite_aggregate_load_by_uuid($node->uuid)) {
+          $js[$key]['data']['statistics']['url'] = url(drupal_get_path('module', 'multisite_statistics') . '/multisite_statistics.php');
+          $js[$key]['data']['statistics']['data']['maid'] = $aggregate->maid;
+        }
       }
     }
   }
