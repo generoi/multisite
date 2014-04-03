@@ -404,6 +404,7 @@ function _multisite_aggregate_entity_save($entity, $type, $op) {
 
   $aggregate->save();
   // Connect back to this multisites
+  field_info_cache_clear();
   db_set_active('default');
 }
 
