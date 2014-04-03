@@ -1,0 +1,244 @@
+<?php
+
+/**
+ * @file multisite_entityreference.module
+ * TODO: Enter file description here.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function multisite_entityreference_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'entityreference') {
+    return "plugins/$plugin_type";
+  }
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function multisite_entityreference_field_formatter_info() {
+  global $base_url;
+  return array(
+    'multisite_entityreference_label' => array(
+      'label' => t('Label (multisite)'),
+      'description' => t('Display the label of the referenced entities from a multisite'),
+      'field types' => array('entityreference'),
+      'settings' => array(
+        'link' => FALSE,
+        'multisite' => 'master',
+        'base_url' => $base_url,
+      ),
+    ),
+    'multisite_entityreference_entity_view' => array(
+      'label' => t('Rendered entity (multisite)'),
+      'description' => t('Display the referenced multisite entities rendered by entity_view().'),
+      'field types' => array('entityreference'),
+      'settings' => array(
+        'view_mode' => 'default',
+        'links' => TRUE,
+        'multisite' => 'master',
+        'base_url' => $base_url,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_settings_form().
+ */
+function multisite_entityreference_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+
+  if ($display['type'] == 'multisite_entityreference_label') {
+    $element['link'] = array(
+      '#title' => t('Link label to the referenced entity'),
+      '#type' => 'checkbox',
+      '#default_value' => $settings['link'],
+    );
+  }
+
+  if ($display['type'] == 'multisite_entityreference_entity_view') {
+    $entity_info = entity_get_info($field['settings']['target_type']);
+    $options = array('default' => t('Default'));
+    if (!empty($entity_info['view modes'])) {
+      foreach ($entity_info['view modes'] as $view_mode => $view_mode_settings) {
+        $options[$view_mode] = $view_mode_settings['label'];
+      }
+    }
+
+    $element['view_mode'] = array(
+      '#type' => 'select',
+      '#options' => $options,
+      '#title' => t('View mode'),
+      '#default_value' => $settings['view_mode'],
+      '#access' => count($options) > 1,
+    );
+
+    $element['links'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Show links'),
+      '#default_value' => $settings['links'],
+    );
+  }
+
+  $element['multisite'] = array(
+    '#title' => t('Database configured in settings.php'),
+    '#type' => 'textfield',
+    '#default_value' => $settings['multisite'],
+  );
+  $element['base_url'] = array(
+    '#title' => t('Base URL to use while rendering the field'),
+    '#type' => 'textfield',
+    '#default_value' => $settings['base_url'],
+  );
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_formatter_settings_summary().
+ */
+function multisite_entityreference_field_formatter_settings_summary($field, $instance, $view_mode) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+
+  $summary = array();
+
+  if ($display['type'] == 'multisite_entityreference_label') {
+    $summary[] = $settings['link'] ? t('Link to the referenced entity') : t('No link');
+  }
+
+  if ($display['type'] == 'multisite_entityreference_entity_view') {
+    $entity_info = entity_get_info($field['settings']['target_type']);
+    $view_mode_label = $settings['view_mode'] == 'default' ? t('Default') : $settings['view_mode'];
+    if (isset($entity_info['view modes'][$settings['view_mode']]['label'])) {
+      $view_mode_label = $entity_info['view modes'][$settings['view_mode']]['label'];
+    }
+    $summary[] = t('Rendered as @mode', array('@mode' => $view_mode_label));
+    $summary[] = !empty($settings['links']) ? t('Display links') : t('Do not display links');
+  }
+
+  return implode('<br />', $summary);
+}
+
+/**
+ * Implements hook_field_formatter_prepare_view().
+ */
+function multisite_entityreference_field_formatter_prepare_view($entity_type, $entities, $field, $instances, $langcode, &$items, $displays) {
+  $target_ids = array();
+
+  // Collect every possible entity attached to any of the entities.
+  foreach ($entities as $id => $entity) {
+    foreach ($items[$id] as $delta => $item) {
+      if (isset($item['target_id'])) {
+        $target_ids[] = $item['target_id'];
+      }
+    }
+  }
+  // Displays are always the same.
+  $display = reset($displays);
+  $database = $display['settings']['multisite'];
+  db_set_active($database);
+
+  if ($target_ids) {
+    $target_entities = entity_load($field['settings']['target_type'], $target_ids);
+  }
+  else {
+    $target_entities = array();
+  }
+
+  // Iterate through the fieldable entities again to attach the loaded data.
+  foreach ($entities as $id => $entity) {
+    $rekey = FALSE;
+
+    foreach ($items[$id] as $delta => $item) {
+      // Check whether the referenced entity could be loaded.
+      if (isset($target_entities[$item['target_id']])) {
+        // Replace the instance value with the term data.
+        $items[$id][$delta]['entity'] = $target_entities[$item['target_id']];
+        // Check whether the user has access to the referenced entity.
+        $has_view_access = (entity_access('view', $field['settings']['target_type'], $target_entities[$item['target_id']]) !== FALSE);
+        $has_update_access = (entity_access('update', $field['settings']['target_type'], $target_entities[$item['target_id']]) !== FALSE);
+        $items[$id][$delta]['access'] = ($has_view_access || $has_update_access);
+      }
+      // Otherwise, unset the instance value, since the entity does not exist.
+      else {
+        unset($items[$id][$delta]);
+        $rekey = TRUE;
+      }
+    }
+
+    if ($rekey) {
+      // Rekey the items array.
+      $items[$id] = array_values($items[$id]);
+    }
+  }
+  db_set_active();
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function multisite_entityreference_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  global $base_url;
+  $original_base_url = $base_url;
+  $result = array();
+  $settings = $display['settings'];
+  $base_url = $settings['base_url'];
+
+  // Rebuild the items list to contain only those with access.
+  foreach ($items as $key => $item) {
+    if (empty($item['access'])) {
+      unset($items[$key]);
+    }
+  }
+
+  switch ($display['type']) {
+    case 'multisite_entityreference_label':
+      $handler = entityreference_get_selection_handler($field, $instance, $entity_type, $entity);
+
+      foreach ($items as $delta => $item) {
+        $label = $handler->getLabel($item['entity']);
+        // If the link is to be displayed and the entity has a uri, display a link.
+        // Note the assignment ($url = ) here is intended to be an assignment.
+        if ($display['settings']['link'] && ($uri = entity_uri($field['settings']['target_type'], $item['entity']))) {
+          if (is_array($uri['options'])) {
+            $uri['options']['absolute'] = TRUE;
+          }
+          else {
+            $uri['options'] = array('absolute' => TRUE);
+          }
+          $result[$delta] = array('#markup' => l($label, $uri['path'], $uri['options']));
+        }
+        else {
+          $result[$delta] = array('#markup' => check_plain($label));
+        }
+      }
+      break;
+
+    case 'multisite_entityreference_entity_view':
+      foreach ($items as $delta => $item) {
+        // Protect ourselves from recursive rendering.
+        static $depth = 0;
+        $depth++;
+        if ($depth > 20) {
+          throw new EntityReferenceRecursiveRenderingException(t('Recursive rendering detected when rendering entity @entity_type(@entity_id). Aborting rendering.', array('@entity_type' => $entity_type, '@entity_id' => $item['target_id'])));
+        }
+
+        $entity = clone $item['entity'];
+        unset($entity->content);
+        $result[$delta] = entity_view($field['settings']['target_type'], array($item['target_id'] => $entity), $settings['view_mode'], $langcode, FALSE);
+
+        if (empty($settings['links']) && isset($result[$delta][$field['settings']['target_type']][$item['target_id']]['links'])) {
+          $result[$delta][$field['settings']['target_type']][$item['target_id']]['links']['#access'] = FALSE;
+        }
+        $depth = 0;
+      }
+      break;
+  }
+  $base_url = $original_base_url;
+
+  return $result;
+}

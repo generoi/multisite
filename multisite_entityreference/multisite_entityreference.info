@@ -1,0 +1,8 @@
+name = Multisite Entityreference
+description = TODO: Description of module
+dependencies[] = multisite
+dependencies[] = multisite_views
+dependencies[] = entityreference
+package = multisite
+core = 7.x
+files[] = plugins/selection/multisite_entityreference.inc
