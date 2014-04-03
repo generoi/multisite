@@ -1,0 +1,7 @@
+name = Multisite Views
+description = TODO: Description of module
+dependencies[] = multisite
+dependencies[] = views
+package = multisite
+core = 7.x
+files[] = handlers/views_plugin_multisite_query.inc

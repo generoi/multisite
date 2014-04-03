@@ -1,0 +1,19 @@
+<?php
+
+/**
+ * @file multisite_views.module
+ * TODO: Enter file description here.
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function multisite_views_views_api() {
+  return array(
+    'api' => 3,
+  );
+}
+
+function multisite_entity_uri_alter($entity_type, $entity) {
+  dpm($entity_type);
+}
