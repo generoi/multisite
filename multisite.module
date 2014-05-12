@@ -16,6 +16,11 @@ include_once __DIR__ . '/multisite.inc';
 include_once __DIR__ . '/multisite.stream.inc';
 
 /**
+ * Display Suite fields
+ */
+include_once __DIR__ . '/multisite.ds.inc';
+
+/**
  * Helpers mostly used during site setup.
  */
 include_once __DIR__ . '/multisite.helpers.inc';
