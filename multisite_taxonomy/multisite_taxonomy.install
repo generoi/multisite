@@ -29,7 +29,7 @@ function multisite_taxonomy_schema_alter(&$schema) {
  * Implements hook_uninstall().
  */
 function multisite_taxonomy_uninstall() {
-  if (db_field_exists('multisite_aggregate', 'msid')) {
-    db_drop_field('multisite_aggregate', 'msid');
+  if (db_field_exists('taxonomy_term_data', 'msid')) {
+    db_drop_field('taxonomy_term_data', 'msid');
   }
 }
